@@ -1,14 +1,14 @@
 
 ROOT_DIR=$(PROJECT_ROOT)/img/fs/root
 
-ROOT_IMAGE=fs.img
+ROOT_IMAGE=fs.tar.bz2
 
 
 all: fs-image install
 
 fs-image: _rootfs
 	@rm -rf $(ROOT_IMAGE)
-	tar -cjf $(ROOT_DIR) $(ROOT_IMAGE)
+	tar -cjf $(ROOT_IMAGE) $(ROOT_DIR)
 
 _rootfs:
 	@rm -rf $(ROOT_DIR)

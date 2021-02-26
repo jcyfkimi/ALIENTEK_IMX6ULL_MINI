@@ -43,8 +43,8 @@ FW:
 	@ln -sf $(PROJECT_ROOT)/img/loader $(PROJECT_ROOT)/FW/loader
 	@ln -sf $(PROJECT_ROOT)/img/kernel $(PROJECT_ROOT)/FW/kernel
 	@ln -sf $(PROJECT_ROOT)/img/dtb $(PROJECT_ROOT)/FW/dtb
-	@ln -sf $(PROJECT_ROOT)/img/fs.img $(PROJECT_ROOT)/FW/filesystem
-	@cd $(PROJECT_ROOT)/FW; $(PROJECT_ROOT)/FW/combine-image.sh
+	@ln -sf $(PROJECT_ROOT)/img/fs.tar.bz2 $(PROJECT_ROOT)/FW/filesystem
+#	@cd $(PROJECT_ROOT)/FW; $(PROJECT_ROOT)/FW/combine-image.sh
 
 .PHONY: clean cleanall
 clean:
