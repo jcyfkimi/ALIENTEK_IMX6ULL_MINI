@@ -8,7 +8,7 @@ all: fs-image install
 
 fs-image: _rootfs
 	@rm -rf $(ROOT_IMAGE)
-	tar -cjf $(ROOT_IMAGE) $(ROOT_DIR)
+	cd $(ROOT_DIR) && tar -cjf $(PROJECT_ROOT)/src/rootfs/$(ROOT_IMAGE) * && cd -
 
 _rootfs:
 	@rm -rf $(ROOT_DIR)
