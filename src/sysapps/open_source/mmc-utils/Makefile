@@ -1,4 +1,4 @@
-CC ?= $(SOURCETOOLCHAIN)gcc
+CC = $(SOURCETOOLCHAIN)gcc
 AM_CFLAGS = -D_FILE_OFFSET_BITS=64 -D_FORTIFY_SOURCE=2
 CFLAGS ?= -g -O2
 objects = \
@@ -33,7 +33,7 @@ all: $(progs) install
 ifdef C
 	$(check) $<
 endif
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c $< -o $@
+	$(CC) -c $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) $< -o $@
 
 mmc: $(objects)
 	$(CC) $(CFLAGS) -o $@ $(objects) $(LDFLAGS) $(LIBS)
