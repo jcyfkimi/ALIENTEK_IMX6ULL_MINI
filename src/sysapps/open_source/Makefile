@@ -1,4 +1,5 @@
 SUBDIRS := busybox
+SUBDIRS += mmc-utils
 
 all:
 	@for i in `echo $(SUBDIRS)`; do \
