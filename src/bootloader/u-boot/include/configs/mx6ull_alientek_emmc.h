@@ -152,7 +152,6 @@
 	"loadimage=fatload mmc ${mmcdev}:${mmcpart} ${loadaddr} ${image}\0" \
 	"loadfdt=fatload mmc ${mmcdev}:${mmcpart} ${fdt_addr} ${fdt_file}\0" \
 	"mmcboot=echo Booting from mmc ...; " \
-		"run mmcargs; " \
 		"if test ${boot_fdt} = yes || test ${boot_fdt} = try; then " \
 			"if run loadfdt; then " \
 				"bootz ${loadaddr} - ${fdt_addr}; " \
@@ -211,6 +210,8 @@
 	   "else run netboot; fi"
 #endif
 
+#define CONFIG_BOOTARGS	"console=ttymxc0,115200 root=/dev/mmcblk1p5 rootwait rw"
+
 /* Miscellaneous configurable options */
 #define CONFIG_CMD_MEMTEST
 #define CONFIG_SYS_MEMTEST_START	0x80000000
@@ -250,7 +251,7 @@
 
 #define CONFIG_SYS_MMC_ENV_DEV		1   /* USDHC2 */
 #define CONFIG_SYS_MMC_ENV_PART		0	/* user area */
-#define CONFIG_MMCROOT			"/dev/mmcblk1p2"  /* USDHC2 */
+#define CONFIG_MMCROOT			"/dev/mmcblk1p5"  /* USDHC2 */
 
 #define CONFIG_CMD_BMODE
 
