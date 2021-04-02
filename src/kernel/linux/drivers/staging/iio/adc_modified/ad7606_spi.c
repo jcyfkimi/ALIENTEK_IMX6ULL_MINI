@@ -42,19 +42,57 @@ static const struct ad7606_bus_ops ad7606_spi_bops = {
 
 static int ad7606_spi_probe(struct spi_device *spi)
 {
+	struct iio_dev *indio_dev;
+
 	printk("Kimi ====> enter ad7606_spi_probe\n");
-	const struct spi_device_id *id = spi_get_device_id(spi);
 
+	indio_dev = ad7606_probe(&spi->dev, spi->irq, NULL,
+			   spi_get_device_id(spi)->driver_data,
+			   &ad7606_spi_bops);
 
-	return ad7606_probe(&spi->dev, spi->irq, NULL,
-			    id->name, id->driver_data,
-			    &ad7606_spi_bops);
+	if (IS_ERR(indio_dev))
+		return PTR_ERR(indio_dev);
+
+	spi_set_drvdata(spi, indio_dev);
+
+	return 0;
 }
 
 static int ad7606_spi_remove(struct spi_device *spi)
 {
-	return ad7606_remove(&spi->dev, spi->irq);
+	struct iio_dev *indio_dev = dev_get_drvdata(&spi->dev);
+
+	return ad7606_remove(indio_dev, spi->irq);
 }
+
+#ifdef CONFIG_PM
+static int ad7606_spi_suspend(struct device *dev)
+{
+	struct iio_dev *indio_dev = dev_get_drvdata(dev);
+
+	ad7606_suspend(indio_dev);
+
+	return 0;
+}
+
+static int ad7606_spi_resume(struct device *dev)
+{
+	struct iio_dev *indio_dev = dev_get_drvdata(dev);
+
+	ad7606_resume(indio_dev);
+
+	return 0;
+}
+
+static const struct dev_pm_ops ad7606_pm_ops = {
+	.suspend = ad7606_spi_suspend,
+	.resume  = ad7606_spi_resume,
+};
+#define AD7606_SPI_PM_OPS (&ad7606_pm_ops)
+
+#else
+#define AD7606_SPI_PM_OPS NULL
+#endif
 
 static const struct spi_device_id ad7606_id[] = {
 	{"ad7606-8", ID_AD7606_8},
@@ -71,11 +109,13 @@ static const struct of_device_id ad7606_of_match[] = {
 	{ },
 };
 MODULE_DEVICE_TABLE(of, ad7606_of_match);
+
 static struct spi_driver ad7606_driver = {
 	.driver = {
 		.name = "ad7606",
+		.owner = THIS_MODULE,
 		.of_match_table = ad7606_of_match,
-		.pm = AD7606_PM_OPS,
+		.pm    = AD7606_SPI_PM_OPS,
 	},
 	.probe = ad7606_spi_probe,
 	.remove = ad7606_spi_remove,

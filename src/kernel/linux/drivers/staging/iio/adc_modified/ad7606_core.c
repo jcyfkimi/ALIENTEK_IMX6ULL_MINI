@@ -26,12 +26,21 @@
 
 int ad7606_reset(struct ad7606_state *st)
 {
+	/*
 	if (gpio_is_valid(st->pdata->gpio_reset)) {
 		gpio_set_value(st->pdata->gpio_reset, 1);
-		ndelay(100); /* t_reset >= 100ns */
+		ndelay(100); // t_reset >= 100ns
 		gpio_set_value(st->pdata->gpio_reset, 0);
 		return 0;
 	}
+	*/
+	if (st->gpio_reset) {
+		gpiod_set_value(st->gpio_reset, 1);
+		ndelay(100); /* t_reset >= 100ns */
+		gpiod_set_value(st->gpio_reset, 0);
+		return 0;
+	}
+
 
 	return -ENODEV;
 }
@@ -42,17 +51,18 @@ static int ad7606_scan_direct(struct iio_dev *indio_dev, unsigned ch)
 	int ret;
 
 	st->done = false;
-	gpio_set_value(st->pdata->gpio_convst, 1);
+	gpiod_set_value(st->gpio_convst, 1);
 
 	ret = wait_event_interruptible(st->wq_data_avail, st->done);
 	if (ret)
 		goto error_ret;
 
-	if (gpio_is_valid(st->pdata->gpio_frstdata)) {
+	//if (gpio_is_valid(st->pdata->gpio_frstdata)) {
+	if (st->gpio_frstdata) {
 		ret = st->bops->read_block(st->dev, 1, st->data);
 		if (ret)
 			goto error_ret;
-		if (!gpio_get_value(st->pdata->gpio_frstdata)) {
+		if (!gpiod_get_value(st->gpio_frstdata)) {
 			/* This should never happen */
 			ad7606_reset(st);
 			ret = -EIO;
@@ -72,7 +82,7 @@ static int ad7606_scan_direct(struct iio_dev *indio_dev, unsigned ch)
 	ret = st->data[ch];
 
 error_ret:
-	gpio_set_value(st->pdata->gpio_convst, 0);
+	gpiod_set_value(st->gpio_convst, 0);
 
 	return ret;
 }
@@ -133,7 +143,7 @@ static ssize_t ad7606_store_range(struct device *dev,
 		return -EINVAL;
 	}
 	mutex_lock(&indio_dev->mlock);
-	gpio_set_value(st->pdata->gpio_range, lval == 10000);
+	gpiod_set_value(st->gpio_range, lval == 10000);
 	st->range = lval;
 	mutex_unlock(&indio_dev->mlock);
 
@@ -172,7 +182,6 @@ static ssize_t ad7606_store_oversampling_ratio(struct device *dev,
 	struct ad7606_state *st = iio_priv(indio_dev);
 	unsigned long lval;
 	int ret;
-
 	ret = kstrtoul(buf, 10, &lval);
 	if (ret)
 		return ret;
@@ -184,9 +193,11 @@ static ssize_t ad7606_store_oversampling_ratio(struct device *dev,
 	}
 
 	mutex_lock(&indio_dev->mlock);
-	gpio_set_value(st->pdata->gpio_os0, (ret >> 0) & 1);
-	gpio_set_value(st->pdata->gpio_os1, (ret >> 1) & 1);
-	gpio_set_value(st->pdata->gpio_os1, (ret >> 2) & 1);
+
+	gpiod_set_value(st->gpio_os->desc[0], (ret >> 0) & 1);
+	gpiod_set_value(st->gpio_os->desc[1], (ret >> 1) & 1);
+	gpiod_set_value(st->gpio_os->desc[2], (ret >> 2) & 1);
+
 	st->oversampling = lval;
 	mutex_unlock(&indio_dev->mlock);
 
@@ -301,6 +312,7 @@ static const struct ad7606_chip_info ad7606_chip_info_tbl[] = {
 	},
 };
 
+/*
 static int ad7606_request_gpios(struct ad7606_state *st)
 {
 	struct gpio gpio_array[3] = {
@@ -417,6 +429,44 @@ static void ad7606_free_gpios(struct ad7606_state *st)
 	}
 	gpio_free(st->pdata->gpio_convst);
 }
+*/
+
+static int ad7606_request_gpios(struct ad7606_state *st)
+{
+	struct device *dev = st->dev;
+
+	st->gpio_convst = devm_gpiod_get(dev, "adi,conversion-start",
+					 GPIOD_OUT_LOW);
+	if (IS_ERR(st->gpio_convst))
+		return PTR_ERR(st->gpio_convst);
+
+	st->gpio_reset = devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_LOW);
+	if (IS_ERR(st->gpio_reset))
+		return PTR_ERR(st->gpio_reset);
+
+	st->gpio_range = devm_gpiod_get_optional(dev, "adi,range",
+						 GPIOD_OUT_LOW);
+	if (IS_ERR(st->gpio_range))
+		return PTR_ERR(st->gpio_range);
+
+	st->gpio_standby = devm_gpiod_get_optional(dev, "standby",
+						   GPIOD_OUT_HIGH);
+	if (IS_ERR(st->gpio_standby))
+		return PTR_ERR(st->gpio_standby);
+
+	st->gpio_frstdata = devm_gpiod_get_optional(dev, "adi,first-data",
+						    GPIOD_IN);
+	if (IS_ERR(st->gpio_frstdata))
+		return PTR_ERR(st->gpio_frstdata);
+
+	if (!st->chip_info->has_oversampling)
+		return 0;
+
+	st->gpio_os = devm_gpiod_get_array_optional(dev,
+						    "adi,oversampling-ratio",
+						    GPIOD_OUT_LOW);
+	return PTR_ERR_OR_ZERO(st->gpio_os);
+}
 
 /**
  *  Interrupt handler
@@ -464,10 +514,12 @@ struct iio_dev *ad7606_probe(struct device *dev, int irq,
 			      unsigned id,
 			      const struct ad7606_bus_ops *bops)
 {
-	struct ad7606_platform_data *pdata = dev->platform_data;
+	// struct ad7606_platform_data *pdata = dev->platform_data;
 	struct ad7606_state *st;
 	int ret;
 	struct iio_dev *indio_dev;
+
+	printk("Kimi ====> enter ad7606_probe\n");
 
 	indio_dev = devm_iio_device_alloc(dev, sizeof(*st));
 	if (!indio_dev)
@@ -478,8 +530,11 @@ struct iio_dev *ad7606_probe(struct device *dev, int irq,
 	st->dev = dev;
 	st->bops = bops;
 	st->base_address = base_address;
-	st->range = pdata->default_range == 10000 ? 10000 : 5000;
+	// st->range = pdata->default_range == 10000 ? 10000 : 5000;
+	st->range = 0;
+	st->oversampling = 1;
 
+	/*
 	ret = ad7606_oversampling_get_index(pdata->default_os);
 	if (ret < 0) {
 		dev_warn(dev, "oversampling %d is not supported\n",
@@ -488,6 +543,7 @@ struct iio_dev *ad7606_probe(struct device *dev, int irq,
 	} else {
 		st->oversampling = pdata->default_os;
 	}
+	*/
 
 	st->reg = devm_regulator_get(dev, "vcc");
 	if (!IS_ERR(st->reg)) {
@@ -496,10 +552,30 @@ struct iio_dev *ad7606_probe(struct device *dev, int irq,
 			return ERR_PTR(ret);
 	}
 
-	st->pdata = pdata;
+	// st->pdata = pdata;
 	st->chip_info = &ad7606_chip_info_tbl[id];
 
+	ret = ad7606_request_gpios(st);
+	if(ret)
+	{
+		goto error_disable_reg;
+	}
+
 	indio_dev->dev.parent = dev;
+
+	if (st->gpio_os) {
+		if (st->gpio_range)
+			indio_dev->info = &ad7606_info_os_and_range;
+		else
+			indio_dev->info = &ad7606_info_os;
+	} else {
+		if (st->gpio_range)
+			indio_dev->info = &ad7606_info_range;
+		else
+			indio_dev->info = &ad7606_info_no_os_or_range;
+	}
+
+	/*
 	if (gpio_is_valid(st->pdata->gpio_os0) &&
 	    gpio_is_valid(st->pdata->gpio_os1) &&
 	    gpio_is_valid(st->pdata->gpio_os2)) {
@@ -513,6 +589,8 @@ struct iio_dev *ad7606_probe(struct device *dev, int irq,
 		else
 			indio_dev->info = &ad7606_info_no_os_or_range;
 	}
+	*/
+
 	indio_dev->modes = INDIO_DIRECT_MODE;
 	indio_dev->name = st->chip_info->name;
 	indio_dev->channels = st->chip_info->channels;
@@ -520,9 +598,11 @@ struct iio_dev *ad7606_probe(struct device *dev, int irq,
 
 	init_waitqueue_head(&st->wq_data_avail);
 
+	/*
 	ret = ad7606_request_gpios(st);
 	if (ret)
 		goto error_disable_reg;
+	*/
 
 	ret = ad7606_reset(st);
 	if (ret)
@@ -549,7 +629,7 @@ error_free_irq:
 	free_irq(irq, indio_dev);
 
 error_free_gpios:
-	ad7606_free_gpios(st);
+	// ad7606_free_gpios(st);
 
 error_disable_reg:
 	if (!IS_ERR(st->reg))
@@ -568,7 +648,7 @@ int ad7606_remove(struct iio_dev *indio_dev, int irq)
 	if (!IS_ERR(st->reg))
 		regulator_disable(st->reg);
 
-	ad7606_free_gpios(st);
+	// ad7606_free_gpios(st);
 
 	return 0;
 }
@@ -577,10 +657,12 @@ void ad7606_suspend(struct iio_dev *indio_dev)
 {
 	struct ad7606_state *st = iio_priv(indio_dev);
 
-	if (gpio_is_valid(st->pdata->gpio_stby)) {
-		if (gpio_is_valid(st->pdata->gpio_range))
-			gpio_set_value(st->pdata->gpio_range, 1);
-		gpio_set_value(st->pdata->gpio_stby, 0);
+	// if (gpio_is_valid(st->pdata->gpio_stby)) {
+	if (st->gpio_standby) {
+		//if (gpio_is_valid(st->pdata->gpio_range))
+		if (st->gpio_range)
+			gpiod_set_value(st->gpio_range, 1);
+		gpiod_set_value(st->gpio_standby, 0);
 	}
 }
 
@@ -588,12 +670,14 @@ void ad7606_resume(struct iio_dev *indio_dev)
 {
 	struct ad7606_state *st = iio_priv(indio_dev);
 
-	if (gpio_is_valid(st->pdata->gpio_stby)) {
-		if (gpio_is_valid(st->pdata->gpio_range))
-			gpio_set_value(st->pdata->gpio_range,
+	// if (gpio_is_valid(st->pdata->gpio_stby)) {
+	if (st->gpio_standby) {
+		// if (gpio_is_valid(st->pdata->gpio_range))
+		if (st->gpio_range)
+			gpiod_set_value(st->gpio_range,
 					st->range == 10000);
 
-		gpio_set_value(st->pdata->gpio_stby, 1);
+		gpiod_set_value(st->gpio_standby, 1);
 		ad7606_reset(st);
 	}
 }
