@@ -338,25 +338,40 @@ static int ad7606_request_gpios(struct ad7606_state *st)
 	st->gpio_convst = devm_gpiod_get(dev, "adi,conversion-start",
 					 GPIOD_OUT_LOW);
 	if (IS_ERR(st->gpio_convst))
+    {
+        printk("Kimi ====> request convst gpio failed\n");
 		return PTR_ERR(st->gpio_convst);
+    }
 
 	st->gpio_reset = devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_LOW);
 	if (IS_ERR(st->gpio_reset))
+    {
+        printk("Kimi ====> request reset gpio failed\n");
 		return PTR_ERR(st->gpio_reset);
+    }
 
 	st->gpio_range = devm_gpiod_get_optional(dev, "adi,range", GPIOD_OUT_LOW);
 	if (IS_ERR(st->gpio_range))
+    {
+        printk("Kimi ====> request range gpio failed\n");
 		return PTR_ERR(st->gpio_range);
+    }
 
 	st->gpio_standby = devm_gpiod_get_optional(dev, "standby",
 						   GPIOD_OUT_HIGH);
 	if (IS_ERR(st->gpio_standby))
+    {
+        printk("Kimi ====> request standby failed\n");
 		return PTR_ERR(st->gpio_standby);
+    }
 
 	st->gpio_frstdata = devm_gpiod_get_optional(dev, "adi,first-data",
 						    GPIOD_IN);
 	if (IS_ERR(st->gpio_frstdata))
+    {
+        printk("Kimi ====> request frstdata gpio failed\n");
 		return PTR_ERR(st->gpio_frstdata);
+    }
 
 	st->gpio_os = devm_gpiod_get_array_optional(dev, "adi,oversampling-ratio",
 			GPIOD_OUT_LOW);
@@ -432,6 +447,7 @@ int ad7606_probe(struct device *dev, int irq, void __iomem *base_address,
 	st->oversampling = 1;
 	INIT_WORK(&st->poll_work, &ad7606_poll_bh_to_ring);
 
+    /*
 	st->reg = devm_regulator_get(dev, "avcc");
 	if (IS_ERR(st->reg))
 		return PTR_ERR(st->reg);
@@ -441,10 +457,14 @@ int ad7606_probe(struct device *dev, int irq, void __iomem *base_address,
 		dev_err(dev, "Failed to enable specified AVcc supply\n");
 		return ret;
 	}
+    */
 
 	ret = ad7606_request_gpios(st);
 	if (ret)
+    {
+        printk("Kimi ====> failed to request gpio\n");
 		goto error_disable_reg;
+    }
 
 	st->chip_info = &ad7606_chip_info_tbl[id];
 
@@ -469,21 +489,33 @@ int ad7606_probe(struct device *dev, int irq, void __iomem *base_address,
 
 	ret = ad7606_reset(st);
 	if (ret)
-		dev_warn(st->dev, "failed to RESET: no RESET GPIO specified\n");
+    {
+		//dev_warn(st->dev, "failed to RESET: no RESET GPIO specified\n");
+        printk("Kimi ====> failed to reset: no reset gpio specified\n");
+    }
 
 	ret = request_irq(irq, ad7606_interrupt, IRQF_TRIGGER_FALLING, name,
 			  indio_dev);
 	if (ret)
+    {
+        printk("Kimi ====> failed to request irq\n");
 		goto error_disable_reg;
+    }
 
 	ret = iio_triggered_buffer_setup(indio_dev, &ad7606_trigger_handler,
 					 NULL, NULL);
 	if (ret)
+    {
+        printk("Kimi ====> iio_triggered_buffer_setup failed\n");
 		goto error_free_irq;
+    }
 
 	ret = iio_device_register(indio_dev);
 	if (ret)
+    {
+        printk("Kimi ====> iio_device_register failed\n");
 		goto error_unregister_ring;
+    }
 
 	dev_set_drvdata(dev, indio_dev);
 
@@ -495,7 +527,7 @@ error_free_irq:
 	free_irq(irq, indio_dev);
 
 error_disable_reg:
-	regulator_disable(st->reg);
+	//regulator_disable(st->reg);
 	return ret;
 }
 EXPORT_SYMBOL_GPL(ad7606_probe);
@@ -509,7 +541,7 @@ int ad7606_remove(struct device *dev, int irq)
 	iio_triggered_buffer_cleanup(indio_dev);
 
 	free_irq(irq, indio_dev);
-	regulator_disable(st->reg);
+	//regulator_disable(st->reg);
 
 	return 0;
 }
